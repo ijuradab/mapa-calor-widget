@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMBI Sudamérica - Mapa de Calor Interactivo</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>📊 EMBI Sudamérica</h1>
+            <p class="subtitle">Mapa de Calor Interactivo - Spread del EMBI por País</p>
+        </header>
+
+        <!-- Controls Panel -->
+        <div class="controls-panel">
+            <!-- Time Slider Section -->
+            <div class="slider-section">
+                <div class="slider-header">
+                    <label for="timeSlider">📅 Línea de Tiempo</label>
+                    <span class="current-date" id="currentDate">Cargando...</span>
+                </div>
+                <div class="slider-container">
+                    <button class="slider-btn" id="prevBtn" title="Fecha anterior">◀</button>
+                    <input type="range" id="timeSlider" min="0" max="100" value="0" class="time-slider">
+                    <button class="slider-btn" id="nextBtn" title="Fecha siguiente">▶</button>
+                </div>
+                <div class="slider-info">
+                    <span id="startDate">-</span>
+                    <span id="endDate">-</span>
+                </div>
+            </div>
+
+            <!-- Download Section -->
+            <div class="download-section">
+                <h3>📥 Descargar Datos</h3>
+                <div class="download-controls">
+                    <div class="download-group">
+                        <label for="downloadType">Tipo de descarga:</label>
+                        <select id="downloadType" class="select-input">
+                            <option value="single">País específico - Fecha actual</option>
+                            <option value="all">Todos los países - Fecha actual</option>
+                            <option value="range_single">País específico - Rango de fechas</option>
+                            <option value="range_all">Todos los países - Rango de fechas</option>
+                        </select>
+                    </div>
+
+                    <div class="download-group" id="countryGroup">
+                        <label for="countrySelect">País:</label>
+                        <select id="countrySelect" class="select-input">
+                            <option value="Argentina">Argentina</option>
+                            <option value="Bolivia">Bolivia</option>
+                            <option value="Brasil">Brasil</option>
+                            <option value="Chile">Chile</option>
+                            <option value="Colombia">Colombia</option>
+                            <option value="Ecuador">Ecuador</option>
+                            <option value="Paraguay">Paraguay</option>
+                            <option value="Perú">Perú</option>
+                            <option value="Uruguay">Uruguay</option>
+                            <option value="Venezuela">Venezuela</option>
+                        </select>
+                    </div>
+
+                    <div class="download-group date-range-group" id="dateRangeGroup" style="display: none;">
+                        <div>
+                            <label for="startDateInput">Fecha inicio:</label>
+                            <input type="date" id="startDateInput" class="date-input">
+                        </div>
+                        <div>
+                            <label for="endDateInput">Fecha fin:</label>
+                            <input type="date" id="endDateInput" class="date-input">
+                        </div>
+                    </div>
+
+                    <button id="downloadBtn" class="download-btn">⬇ Descargar CSV</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map Container -->
+        <div class="map-container">
+            <div id="map" class="map">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Cargando mapa...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Datos: EMBI Global Diversified Subindices | Visualización interactiva con Flask, Pandas y Folium</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/map_controller.js') }}"></script>
+</body>
+</html>
