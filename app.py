@@ -236,7 +236,7 @@ def create_map_for_date(date_str):
             }
 
         # Add GeoJson to map
-        folium.GeoJson(
+        geo_json = folium.GeoJson(
             geojson_url,
             style_function=style_function,
             highlight_function=highlight_function,
@@ -246,7 +246,41 @@ def create_map_for_date(date_str):
                 localize=True,
                 sticky=True
             )
-        ).add_to(m)
+        )
+        
+        # Add custom hover listeners via JavaScript
+        # This will be injected into the map's initialization logic
+        hover_js = """
+        function(e) {
+            var layer = e.target;
+            var countryName = layer.feature.properties.name;
+            if (window.parent && window.parent.handleCountryHover) {
+                window.parent.handleCountryHover(countryName);
+            } else if (typeof handleCountryHover === 'function') {
+                handleCountryHover(countryName);
+            }
+        }
+        """
+        
+        out_js = """
+        function(e) {
+            if (window.parent && window.parent.clearCountryHover) {
+                window.parent.clearCountryHover();
+            } else if (typeof clearCountryHover === 'function') {
+                clearCountryHover();
+            }
+        }
+        """
+        
+        geo_json.add_child(folium.Element(f"""
+            <script>
+                var geo_json_{geo_json.get_name()} = {geo_json.get_name()};
+                geo_json_{geo_json.get_name()}.on('mouseover', {hover_js});
+                geo_json_{geo_json.get_name()}.on('mouseout', {out_js});
+            </script>
+        """))
+        
+        geo_json.add_to(m)
 
         # Add permanent value labels
         for country, coords in country_coords.items():
@@ -304,6 +338,38 @@ def get_map(date):
     """Return map HTML for a specific date"""
     map_html = create_map_for_date(date)
     return Response(map_html, mimetype='text/html')
+
+@app.route('/api/historical/<country>')
+def get_historical_data(country):
+    """Return historical EMBI data for a specific country"""
+    try:
+        if country not in df.columns:
+            # Try to handle mapping if needed
+            csv_name = None
+            # The name_mapping from create_map_for_date is local, 
+            # ideally we should have a shared mapping or verify against latam_countries
+            if country in latam_countries:
+                csv_name = country
+            else:
+                # Reverse lookup in name_mapping logic (simplified)
+                name_mapping = {
+                    'Brazil': 'Brasil', 'Mexico': 'México', 'Peru': 'Perú', 
+                    'Panama': 'Panamá', 'Dominican Republic': 'REP DOM'
+                }
+                csv_name = name_mapping.get(country, country)
+
+            if csv_name not in df.columns:
+                return jsonify({'error': f'Country {country} not found'}), 404
+            country = csv_name
+
+        historical = df[['Fecha', country]].dropna()
+        data = {
+            'labels': historical['Fecha'].dt.strftime('%Y-%m-%d').tolist(),
+            'values': historical[country].tolist()
+        }
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/download/country/<country>/<date>')
 def download_country_date(country, date):
