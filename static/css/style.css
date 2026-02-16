@@ -122,8 +122,8 @@ body {
 }
 
 .time-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
     appearance: none;
+    -webkit-appearance: none;
     width: 24px;
     height: 24px;
     border-radius: 50%;
@@ -232,7 +232,15 @@ body {
     transform: translateY(0);
 }
 
-/* Map Container */
+.map-iframe {
+    width: 100%;
+    height: 600px;
+    border-radius: 15px;
+    border: none;
+    display: none;
+    /* Hidden until loaded */
+}
+
 .map-container {
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(10px);
@@ -240,23 +248,20 @@ body {
     border-radius: 20px;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
     margin-bottom: 20px;
-}
-
-.map {
-    width: 100%;
-    height: 600px;
-    border-radius: 15px;
-    overflow: hidden;
     position: relative;
+    height: 640px;
+    /* match map height + padding */
 }
 
 .loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    height: 100%;
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
 }
 
 .spinner {
@@ -315,27 +320,20 @@ body {
 
 /* Historical Chart Container */
 .history-chart-container {
-    position: fixed;
-    bottom: -400px;
-    /* Hidden by default */
-    left: 50%;
-    transform: translateX(-50%);
-    width: 90%;
-    max-width: 1200px;
-    height: 350px;
-    background: rgba(255, 255, 255, 0.98);
-    backdrop-filter: blur(15px);
-    border-radius: 20px 20px 0 0;
-    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2);
-    z-index: 10000;
-    transition: bottom 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
     padding: 20px;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    height: 380px;
     display: flex;
     flex-direction: column;
+    transition: all 0.3s ease;
 }
 
-.history-chart-container.active {
-    bottom: 0;
+.history-chart-container.hidden {
+    display: none;
 }
 
 .chart-header {

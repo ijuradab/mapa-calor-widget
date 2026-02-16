@@ -124,6 +124,27 @@ country_coords = {
     'REP DOM': [18.7, -70.2]
 }
 
+# Advanced label positioning in the ocean to prevent overlap and click blocking
+label_positions = {
+    'Argentina': [-40.0, -40.0],
+    'Bolivia': [-18.0, -92.0],
+    'Brasil': [-10.0, -25.0],
+    'Chile': [-45.0, -85.0],
+    'Colombia': [2.0, -95.0],
+    'Costa Rica': [5.0, -98.0],
+    'Ecuador': [-4.0, -98.0],
+    'El Salvador': [9.0, -102.0],
+    'Guatemala': [13.0, -105.0],
+    'Honduras': [18.0, -105.0],
+    'México': [20.0, -120.0],
+    'Paraguay': [-25.0, -35.0],
+    'Perú': [-14.0, -95.0],
+    'Panamá': [2.0, -85.0],
+    'Uruguay': [-35.0, -35.0],
+    'Venezuela': [18.0, -65.0],
+    'REP DOM': [25.0, -70.0],
+}
+
 def get_color_for_value_simple(value, q33, q67):
     """Return color based on value and thresholds"""
     if pd.isna(value):
@@ -207,7 +228,12 @@ def create_map_for_date(date_str):
                 geo_to_csv[gn] = csv_name
 
         # GeoJson layer
-        geojson_url = 'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson'
+        geojson_path = 'countries.geojson'
+        if os.path.exists(geojson_path):
+            with open(geojson_path, 'r', encoding='utf-8') as f:
+                geojson_data = json.load(f)
+        else:
+            geojson_data = 'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson'
         
         def style_function(feature):
             admin_name = feature['properties'].get('name', '')
@@ -221,7 +247,7 @@ def create_map_for_date(date_str):
             return {
                 'fillColor': fill_color,
                 'color': 'black',
-                'weight': 1,
+                'weight': 1.5,
                 'fillOpacity': 0.7 if csv_name else 0.05
             }
 
@@ -231,13 +257,13 @@ def create_map_for_date(date_str):
             return {
                 'fillColor': '#ffffff',
                 'color': 'black',
-                'weight': 2,
+                'weight': 3,
                 'fillOpacity': 0.9 if csv_name else 0.05
             }
 
         # Add GeoJson to map
         geo_json = folium.GeoJson(
-            geojson_url,
+            geojson_data,
             style_function=style_function,
             highlight_function=highlight_function,
             tooltip=folium.GeoJsonTooltip(
@@ -248,51 +274,117 @@ def create_map_for_date(date_str):
             )
         )
         
-        # Add custom hover listeners via JavaScript
-        # This will be injected into the map's initialization logic
-        hover_js = """
+        # Custom click listeners via JavaScript
+        click_js = """
         function(e) {
-            var layer = e.target;
-            var countryName = layer.feature.properties.name;
-            if (window.parent && window.parent.handleCountryHover) {
-                window.parent.handleCountryHover(countryName);
-            } else if (typeof handleCountryHover === 'function') {
-                handleCountryHover(countryName);
+            // En Leaflet GeoJSON, e.layer contiene la capa individual (el país)
+            var layer = e.layer || e.target;
+            if (!layer.feature) return;
+            
+            console.log("🔍 Propiedades detectadas:", layer.feature.properties);
+            var countryName = layer.feature.properties.name || layer.feature.properties.ADMIN || layer.feature.properties.NAME;
+            console.log("🖱️ Click detectado en (iframe):", countryName);
+            
+            try {
+                // Notificar al padre usando handleCountryClick si existe
+                if (window.parent && typeof window.parent.handleCountryClick === 'function') {
+                    window.parent.handleCountryClick(countryName);
+                } else if (window.top && typeof window.top.handleCountryClick === 'function') {
+                    window.top.handleCountryClick(countryName);
+                } else {
+                    console.warn("⚠️ No se pudo comunicar con la página principal (handleCountryClick no encontrado)");
+                    // Plan C: postMessage
+                    window.parent.postMessage({ type: 'country_click', country: countryName }, '*');
+                }
+            } catch (err) {
+                console.error("❌ Error comunicando con el padre:", err);
             }
         }
         """
-        
-        out_js = """
-        function(e) {
-            if (window.parent && window.parent.clearCountryHover) {
-                window.parent.clearCountryHover();
-            } else if (typeof clearCountryHover === 'function') {
-                clearCountryHover();
-            }
-        }
+
+        # Injecting at the root level to ensure everything is initialized
+        injection_js = f"""
+        (function() {{
+            console.log("🌊 Script de inyección en el mapa iniciado");
+            var attempts = 0;
+            
+            function setupHover() {{
+                attempts++;
+                var attached = false;
+                
+                try {{
+                    // Buscar capas GeoJSON o grupos en el scope global
+                    for (var key in window) {{
+                        if (key.startsWith('geo_json_') || key.startsWith('macro_element_') || key === '{geo_json.get_name()}') {{
+                            var obj = window[key];
+                            if (obj && typeof obj.on === 'function') {{
+                                console.log("🎯 Vinculando click a capa global:", key);
+                                obj.off('click');
+                                obj.on('click', {click_js});
+                                attached = true;
+                            }}
+                        }}
+                    }}
+                    
+                    // Si no se encontró por variable, buscar dentro del mapa
+                    if (!attached) {{
+                        for (var key in window) {{
+                            if (key.startsWith('map_') && window[key] && typeof window[key].eachLayer === 'function') {{
+                                var leafletMap = window[key];
+                                leafletMap.eachLayer(function(layer) {{
+                                    if (layer.feature || (layer.eachLayer && typeof layer.on === 'function')) {{
+                                        layer.off('click');
+                                        layer.on('click', {click_js});
+                                        attached = true;
+                                    }}
+                                }});
+                                break;
+                            }}
+                        }}
+                    }}
+                }} catch (e) {{
+                    console.error("❌ Error en setupHover:", e);
+                }}
+                
+                if (attached) {{
+                    console.log("✅ Click vinculado correctamente");
+                }} else if (attempts < 60) {{
+                    if (attempts % 10 === 0) console.log("⏳ Buscando capas (intento " + attempts + ")...");
+                    setTimeout(setupHover, 300);
+                }} else {{
+                    console.warn("❌ No se encontró capa para vincular el click");
+                }}
+            }}
+            setupHover();
+        }})();
         """
-        
-        geo_json.add_child(folium.Element(f"""
-            <script>
-                var geo_json_{geo_json.get_name()} = {geo_json.get_name()};
-                geo_json_{geo_json.get_name()}.on('mouseover', {hover_js});
-                geo_json_{geo_json.get_name()}.on('mouseout', {out_js});
-            </script>
-        """))
+        m.get_root().script.add_child(folium.Element(injection_js))
         
         geo_json.add_to(m)
 
-        # Add permanent value labels
-        for country, coords in country_coords.items():
+        # Add permanent value labels with callouts
+        for country, base_coords in country_coords.items():
             if country in country_values:
                 val = country_values[country]
                 if pd.notna(val):
+                    display_coords = label_positions.get(country, base_coords)
+                    
+                    # Draw callout line if position is offset
+                    if display_coords != base_coords:
+                        folium.PolyLine(
+                            locations=[base_coords, display_coords],
+                            color='#666666',
+                            weight=1,
+                            dash_array='5, 5',
+                            opacity=0.6
+                        ).add_to(m)
+                    
                     folium.Marker(
-                        location=coords,
+                        location=display_coords,
                         icon=folium.DivIcon(
                             icon_size=(150,36),
                             icon_anchor=(75,18),
-                            html=f'<div style="font-size: 10pt; font-weight: bold; color: black; background-color: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 4px; text-align: center; border: 1px solid #666; width: fit-content; white-space: nowrap; box-shadow: 1px 1px 3px rgba(0,0,0,0.2);">{val:.2f}%</div>',
+                            html=f'<div style="font-size: 10pt; font-weight: bold; color: black; background-color: rgba(255,255,255,0.7); padding: 2px 4px; border-radius: 4px; text-align: center; border: 1px solid #666; width: fit-content; white-space: nowrap; box-shadow: 1px 1px 3px rgba(0,0,0,0.2); pointer-events: none;">{val:.2f}%</div>',
                         )
                     ).add_to(m)
         
@@ -338,6 +430,15 @@ def get_map(date):
     """Return map HTML for a specific date"""
     map_html = create_map_for_date(date)
     return Response(map_html, mimetype='text/html')
+
+@app.route('/api/debug/map/<date>')
+def debug_map(date):
+    """Debug map generation"""
+    try:
+        map_html = create_map_for_date(date)
+        return map_html
+    except Exception as e:
+        return f"<h1>Debug Error</h1><pre>{str(e)}</pre>"
 
 @app.route('/api/historical/<country>')
 def get_historical_data(country):
@@ -524,4 +625,4 @@ if __name__ == '__main__':
     print(f"Server starting on port {port} with {len(dates_list)} dates available")
     if dates_list:
         print(f"Date range: {dates_list[0]} to {dates_list[-1]}")
-    app.run(debug=False, host='0.0.0.0', port=port)
+    app.run(debug=True, host='0.0.0.0', port=port)

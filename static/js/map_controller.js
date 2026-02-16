@@ -1,3 +1,5 @@
+// alert("JS Cargado Correctamente");
+console.log("🚀 map_controller.js cargado!");
 // Global variables
 let dates = [];
 let currentIndex = 0;
@@ -10,14 +12,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
     updateDownloadControls();
     initHistoryChart();
+
+    // Escuchar mensajes por si falla la comunicación directa del iframe
+    window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'country_click') {
+            console.log("📡 Recibido mensaje postMessage:", event.data.country);
+            handleCountryClick(event.data.country);
+        }
+    });
+
+    // Carga inicial para Ecuador por defecto
+    setTimeout(() => {
+        handleCountryClick('Ecuador');
+    }, 1000);
 });
 
 // Load available dates from API
 async function loadDates() {
+    console.log("🔍 Iniciando carga de fechas...");
     try {
         const response = await fetch('/api/dates');
+        console.log("📡 Respuesta de /api/dates:", response.status, response.statusText);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
         const data = await response.json();
         dates = data.dates;
+        console.log("📅 Fechas cargadas:", dates.length);
 
         if (dates.length > 0) {
             // Set slider max value
@@ -40,33 +64,52 @@ async function loadDates() {
 
             // Load initial map
             await loadMap(dates[currentIndex]);
+        } else {
+            showError('No se encontraron fechas disponibles en el CSV');
         }
     } catch (error) {
-        console.error('Error loading dates:', error);
-        showError('Error al cargar las fechas disponibles');
+        console.error('❌ Error loading dates:', error);
+        showError('Error al cargar las fechas: ' + error.message);
     }
 }
 
 // Load map for specific date
 async function loadMap(date) {
-    try {
-        const mapContainer = document.getElementById('map');
-        mapContainer.innerHTML = '<div class="loading"><div class="spinner"></div><p>Cargando mapa...</p></div>';
+    console.log("🗺️ Intentando cargar mapa para fecha:", date);
+    const iframe = document.getElementById('map-iframe');
+    const loading = document.getElementById('map-loading');
 
-        const response = await fetch(`/api/map/${date}`);
-        if (response.ok) {
-            const html = await response.text();
-            mapContainer.innerHTML = html;
-
-            // Update current date display
-            document.getElementById('currentDate').textContent = formatDate(date);
-        } else {
-            throw new Error('Error loading map');
-        }
-    } catch (error) {
-        console.error('Error loading map:', error);
-        showError('Error al cargar el mapa');
+    if (!iframe || !loading) {
+        console.error("❌ Elementos del DOM no encontrados");
+        return;
     }
+
+    // Show loading, hide iframe
+    loading.style.display = 'flex';
+    iframe.style.display = 'none';
+
+    // Configurar el evento onload ANTES de asignar el src
+    iframe.onload = () => {
+        console.log("✅ Iframe cargado correctamente");
+        loading.style.display = 'none';
+        iframe.style.display = 'block';
+
+        // Update current date display
+        document.getElementById('currentDate').textContent = formatDate(date);
+    };
+
+    // Timeout de seguridad: si no carga en 10 segundos, mostrar error
+    setTimeout(() => {
+        if (loading.style.display !== 'none') {
+            console.warn("⚠️ El mapa está tardando demasiado en cargar...");
+            // No ocultamos el cargando por si acaso, pero avisamos en consola
+        }
+    }, 10000);
+
+    // Set source
+    const mapUrl = `/api/map/${date}`;
+    console.log("📡 Asignando src al iframe:", mapUrl);
+    iframe.src = mapUrl;
 }
 
 // Format date for display
@@ -183,12 +226,16 @@ function handleDownload() {
 
 // Show error message
 function showError(message) {
-    const mapContainer = document.getElementById('map');
-    mapContainer.innerHTML = `
-        <div class="loading">
-            <p style="color: #e74c3c; font-size: 1.2rem;">❌ ${message}</p>
-        </div>
-    `;
+    const loading = document.getElementById('map-loading');
+    const iframe = document.getElementById('map-iframe');
+
+    if (loading) {
+        loading.innerHTML = `
+            <p style="color: #e74c3c; font-size: 1.2rem; text-align: center;">❌ ${message}</p>
+        `;
+        loading.style.display = 'flex';
+    }
+    if (iframe) iframe.style.display = 'none';
 }
 
 // Chart.js initialization and hover handlers
@@ -260,16 +307,14 @@ function initHistoryChart() {
             }
         }
     });
-
-    // Close button logic
-    document.getElementById('close-chart').addEventListener('click', () => {
-        document.getElementById('history-chart-container').classList.remove('active');
-        currentHoveredCountry = null;
-    });
 }
 
-async function handleCountryHover(countryName) {
-    if (currentHoveredCountry === countryName) return;
+async function handleCountryClick(countryName) {
+    console.log("📍 Datos solicitados para:", countryName);
+    if (!countryName) {
+        console.warn("⚠️ Advertencia: countryName es nulo");
+        return;
+    }
     currentHoveredCountry = countryName;
 
     try {
@@ -285,7 +330,7 @@ async function handleCountryHover(countryName) {
         historyChart.update();
 
         // Show container
-        document.getElementById('history-chart-container').classList.add('active');
+        document.getElementById('history-chart-container').classList.remove('hidden');
     } catch (error) {
         console.error('Error fetching historical data:', error);
     }
@@ -297,5 +342,7 @@ function clearCountryHover() {
 }
 
 // Ensure the functions are available globally for the iframe/folium events
-window.handleCountryHover = handleCountryHover;
+window.handleCountryClick = handleCountryClick;
 window.clearCountryHover = clearCountryHover;
+
+console.log("✅ Funciones handleCountryClick expuestas en window");

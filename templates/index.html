@@ -85,19 +85,17 @@
 
         <!-- Map Container -->
         <div class="map-container">
-            <div id="map" class="map">
-                <div class="loading">
-                    <div class="spinner"></div>
-                    <p>Cargando mapa...</p>
-                </div>
+            <div id="map-loading" class="loading">
+                <div class="spinner"></div>
+                <p>Cargando mapa...</p>
             </div>
+            <iframe id="map-iframe" class="map-iframe" src="" frameborder="0"></iframe>
         </div>
 
         <!-- Historical Risk Chart Container -->
         <div id="history-chart-container" class="history-chart-container">
             <div class="chart-header">
                 <h3 id="chart-title">Seleccione un país para ver el riesgo histórico</h3>
-                <button id="close-chart" class="close-chart">&times;</button>
             </div>
             <div class="chart-wrapper">
                 <canvas id="historyChart"></canvas>
